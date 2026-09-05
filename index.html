@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sensex.money — The market's permanent record</title>
+<meta name="description" content="Point-in-time, corporate-action-adjusted historical data for Indian markets. Not another screener — the ledger underneath one.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340..600;1,9..144,400..500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#101d2c;
+    --ink-2:#182a3f;
+    --ink-line:#2c435c;
+    --parchment:#e9ddba;
+    --parchment-2:#ded0a6;
+    --paper-line:#c3b285;
+    --brass:#b8863b;
+    --brass-deep:#8f6527;
+    --verified:#4c7a5e;
+    --estimated:#a97a2f;
+    --unknown:#8a8578;
+    --text-hi:#f3ecd9;
+    --text-dim:#b9c3cf;
+    --text-dark:#1c1913;
+    --text-dark-dim:#5c5646;
+    --serif:'Fraunces', Georgia, serif;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--ink);
+    color:var(--text-hi);
+    font-family:var(--serif);
+    -webkit-font-smoothing:antialiased;
+  }
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto;}
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  a{color:inherit;}
+  :focus-visible{outline:2px solid var(--brass); outline-offset:3px;}
+
+  .wrap{max-width:1120px; margin:0 auto; padding:0 28px;}
+
+  /* ---------- NAV ---------- */
+  nav.top{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:26px 0;
+  }
+  .mark{
+    font-family:var(--mono); font-size:15px; letter-spacing:0.02em;
+    color:var(--text-hi); text-decoration:none; font-weight:500;
+  }
+  .mark span{color:var(--brass);}
+  .navlinks{display:flex; gap:28px; font-family:var(--mono); font-size:13px;}
+  .navlinks a{text-decoration:none; color:var(--text-dim); border-bottom:1px solid transparent;}
+  .navlinks a:hover{color:var(--text-hi); border-bottom-color:var(--brass);}
+  @media (max-width:640px){ .navlinks{display:none;} }
+
+  /* ---------- HERO ---------- */
+  header.hero{padding:56px 0 84px;}
+  .hero-grid{
+    display:grid; grid-template-columns:1.1fr 0.9fr; gap:56px; align-items:center;
+  }
+  @media (max-width:900px){ .hero-grid{grid-template-columns:1fr;} }
+
+  .eyebrow-line{
+    font-family:var(--mono); font-size:13px; color:var(--brass);
+    margin:0 0 18px; letter-spacing:0.01em;
+  }
+  h1{
+    font-family:var(--serif); font-weight:440; font-optical-sizing:auto;
+    font-size:clamp(2.4rem, 4.6vw, 3.6rem);
+    line-height:1.06; letter-spacing:-0.01em; margin:0 0 22px; color:var(--text-hi);
+    max-width:14ch;
+  }
+  h1 em{font-style:italic; font-weight:400; color:var(--parchment);}
+  .lede{
+    font-family:var(--serif); font-size:19px; line-height:1.55; color:var(--text-dim);
+    max-width:46ch; margin:0 0 30px;
+  }
+  .cta-row{display:flex; gap:16px; flex-wrap:wrap; align-items:center;}
+  .btn{
+    font-family:var(--mono); font-size:13.5px; padding:13px 22px;
+    border-radius:2px; text-decoration:none; display:inline-block; cursor:pointer; border:1px solid transparent;
+  }
+  .btn-brass{background:var(--brass); color:#1c1408; font-weight:600;}
+  .btn-brass:hover{background:#c8953f;}
+  .btn-ghost{border-color:var(--ink-line); color:var(--text-hi);}
+  .btn-ghost:hover{border-color:var(--brass); color:var(--brass);}
+
+  /* ---------- LEDGER DEMO ---------- */
+  .ledger-card{
+    background:var(--parchment);
+    border-radius:3px;
+    padding:26px 26px 22px;
+    color:var(--text-dark);
+    box-shadow:0 30px 60px -30px rgba(0,0,0,0.55);
+  }
+  .ledger-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom:1px solid var(--paper-line); padding-bottom:12px; margin-bottom:14px;
+  }
+  .ledger-head .co{font-family:var(--serif); font-size:18px; font-weight:600;}
+  .ledger-head .tag{font-family:var(--mono); font-size:11px; color:var(--text-dark-dim);}
+  .ledger-row{
+    display:grid; grid-template-columns:1fr auto auto; gap:14px;
+    padding:9px 0; border-bottom:1px dashed var(--paper-line);
+    font-family:var(--mono); font-size:13px; align-items:center;
+  }
+  .ledger-row:last-of-type{border-bottom:none;}
+  .ledger-row .label{color:var(--text-dark-dim); font-family:var(--serif); font-size:14px;}
+  .ledger-row .then-val{text-align:right; min-width:74px;}
+  .ledger-row .now-val{text-align:right; min-width:74px; font-weight:600;}
+  .delta-up{color:var(--verified);}
+  .delta-down{color:#a6432f;}
+  .ledger-cols{
+    display:grid; grid-template-columns:1fr auto auto; gap:14px;
+    font-family:var(--mono); font-size:10.5px; color:var(--text-dark-dim);
+    padding-bottom:4px;
+  }
+  .ledger-cols span:nth-child(2), .ledger-cols span:nth-child(3){text-align:right;}
+  .toggle-row{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:16px; padding-top:14px; border-top:1px solid var(--paper-line);
+  }
+  .toggle-label{font-family:var(--mono); font-size:11px; color:var(--text-dark-dim);}
+  .switch{
+    position:relative; width:52px; height:26px; background:#cabb8d; border-radius:20px;
+    border:none; cursor:pointer; padding:0;
+  }
+  .switch .knob{
+    position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%;
+    background:var(--ink); transition:left 0.2s ease;
+  }
+  .switch[aria-pressed="true"]{background:var(--brass);}
+  .switch[aria-pressed="true"] .knob{left:29px; background:#1c1408;}
+  .caption{font-family:var(--mono); font-size:11px; color:var(--text-dark-dim); margin-top:10px; line-height:1.5;}
+
+  /* ---------- SECTION SHELL ---------- */
+  section{padding:78px 0;}
+  .rule{border:none; border-top:1px solid var(--ink-line); margin:0;}
+  .section-head{max-width:56ch; margin-bottom:44px;}
+  .section-head .kicker{font-family:var(--mono); font-size:13px; color:var(--brass); margin:0 0 10px;}
+  .section-head h2{
+    font-family:var(--serif); font-weight:450; font-size:clamp(1.7rem,3vw,2.3rem);
+    line-height:1.15; margin:0 0 14px; color:var(--text-hi);
+  }
+  .section-head p{font-size:16.5px; line-height:1.6; color:var(--text-dim); margin:0;}
+
+  /* ---------- WHAT / GAP ledger rows ---------- */
+  .entries{border-top:1px solid var(--ink-line);}
+  .entry{
+    display:grid; grid-template-columns:220px 1fr; gap:32px;
+    padding:26px 0; border-bottom:1px solid var(--ink-line);
+  }
+  @media (max-width:720px){ .entry{grid-template-columns:1fr;} }
+  .entry .term{font-family:var(--mono); font-size:13px; color:var(--text-dim);}
+  .entry .term b{display:block; font-family:var(--serif); font-size:19px; color:var(--text-hi); font-weight:500; margin-bottom:6px;}
+  .entry .desc{font-size:16px; line-height:1.6; color:var(--text-dim); max-width:58ch;}
+  .status-pill{
+    display:inline-block; font-family:var(--mono); font-size:11px; padding:3px 9px;
+    border-radius:20px; margin-left:8px; vertical-align:middle;
+  }
+  .pill-verified{background:rgba(76,122,94,0.18); color:#8fc4a4;}
+  .pill-estimated{background:rgba(169,122,47,0.18); color:#dab06a;}
+  .pill-unknown{background:rgba(138,133,120,0.2); color:#c9c4b6;}
+
+  /* ---------- ROADMAP (legit sequence) ---------- */
+  .roadmap{border-top:1px solid var(--ink-line); margin-top:6px;}
+  .rstep{
+    display:grid; grid-template-columns:56px 140px 1fr; gap:24px;
+    padding:22px 0; border-bottom:1px solid var(--ink-line); align-items:baseline;
+  }
+  @media (max-width:720px){ .rstep{grid-template-columns:40px 1fr; }
+    .rstep .rq{display:none;}
+  }
+  .rstep .rn{font-family:var(--mono); font-size:15px; color:var(--brass);}
+  .rstep .rq{font-family:var(--mono); font-size:13px; color:var(--text-dim);}
+  .rstep .rt{font-size:16px; line-height:1.55; color:var(--text-hi);}
+  .rstep .rt small{display:block; font-family:var(--mono); font-size:12px; color:var(--text-dim); margin-top:4px;}
+
+  /* ---------- API PREVIEW ---------- */
+  .api-shell{
+    display:grid; grid-template-columns:1fr 1.15fr; gap:36px; align-items:start;
+  }
+  @media (max-width:860px){ .api-shell{grid-template-columns:1fr;} }
+  .api-list{list-style:none; padding:0; margin:0;}
+  .api-list li{
+    font-family:var(--mono); font-size:13.5px; padding:11px 0; border-bottom:1px solid var(--ink-line);
+    display:flex; justify-content:space-between; gap:12px; color:var(--text-dim);
+  }
+  .api-list li b{color:var(--text-hi); font-weight:500;}
+  .api-list li:hover b{color:var(--brass);}
+  pre.codeblock{
+    background:var(--ink-2); border:1px solid var(--ink-line); border-radius:3px;
+    padding:22px; font-family:var(--mono); font-size:12.5px; line-height:1.7; color:#d7e2cf;
+    overflow-x:auto; margin:0;
+  }
+  pre.codeblock .k{color:#e0b45c;}
+  pre.codeblock .s{color:#8fc4a4;}
+  pre.codeblock .c{color:var(--text-dim);}
+
+  /* ---------- TIERS ---------- */
+  .tiers{border-top:1px solid var(--ink-line);}
+  .trow{
+    display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:18px;
+    padding:18px 0; border-bottom:1px solid var(--ink-line); font-size:14.5px; align-items:center;
+  }
+  .trow.head{font-family:var(--mono); font-size:12px; color:var(--brass); padding-bottom:14px;}
+  .trow .cell.name{font-family:var(--serif); font-weight:500; font-size:16px; color:var(--text-hi);}
+  .trow .cell{color:var(--text-dim);}
+  @media (max-width:760px){
+    .trow{grid-template-columns:1fr 1fr;}
+    .trow .cell:nth-child(3), .trow .cell:nth-child(4){display:none;}
+  }
+
+  /* ---------- WAITLIST ---------- */
+  .waitlist{
+    background:var(--parchment); color:var(--text-dark); border-radius:3px; padding:48px;
+    display:grid; grid-template-columns:1.2fr 1fr; gap:36px; align-items:center;
+  }
+  @media (max-width:760px){ .waitlist{grid-template-columns:1fr; padding:32px 26px;} }
+  .waitlist h3{font-family:var(--serif); font-size:26px; margin:0 0 12px; font-weight:500;}
+  .waitlist p{font-size:15px; line-height:1.6; color:var(--text-dark-dim); margin:0;}
+  form.wform{display:flex; flex-direction:column; gap:12px;}
+  form.wform input[type="email"]{
+    font-family:var(--mono); font-size:14px; padding:13px 14px; border:1px solid var(--paper-line);
+    border-radius:2px; background:#f4ecd6; color:var(--text-dark);
+  }
+  form.wform button{
+    font-family:var(--mono); font-size:13.5px; font-weight:600; padding:13px; border:none;
+    border-radius:2px; background:var(--ink); color:var(--parchment); cursor:pointer;
+  }
+  form.wform button:hover{background:#0a141f;}
+  .form-note{font-family:var(--mono); font-size:11px; color:var(--text-dark-dim); margin-top:2px;}
+
+  footer{padding:40px 0 60px; border-top:1px solid var(--ink-line);}
+  .foot-row{display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; font-family:var(--mono); font-size:12.5px; color:var(--text-dim);}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="top">
+    <a class="mark" href="#top">sensex<span>.</span>money</a>
+    <div class="navlinks">
+      <a href="#gap">The gap</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#api">API</a>
+      <a href="#access">Access</a>
+    </div>
+  </nav>
+</div>
+
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow-line">Indian market data infrastructure</p>
+      <h1>The market has a price history.<br>It rarely keeps <em>an honest one.</em></h1>
+      <p class="lede">Most Indian market data shows you what a company's numbers look like today. Sensex.money keeps what they looked like <em style="color:var(--text-hi); font-style:normal;">at the time</em> — point-in-time, corporate-action-adjusted, and never quietly restated.</p>
+      <div class="cta-row">
+        <a class="btn btn-brass" href="#access">Join the waitlist</a>
+        <a class="btn btn-ghost" href="#gap">See the problem</a>
+      </div>
+    </div>
+
+    <div class="ledger-card">
+      <div class="ledger-head">
+        <span class="co">Illustrative Ltd.</span>
+        <span class="tag">FY19 Q3 · EPS &amp; margin</span>
+      </div>
+      <div class="ledger-cols">
+        <span>Metric</span>
+        <span id="col-then">As filed, Jan 2019</span>
+        <span>Current record</span>
+      </div>
+      <div class="ledger-row">
+        <span class="label">EPS</span>
+        <span class="then-val" id="eps-then">₹14.20</span>
+        <span class="now-val delta-down" id="eps-now">₹11.85</span>
+      </div>
+      <div class="ledger-row">
+        <span class="label">Net margin</span>
+        <span class="then-val" id="mg-then">18.4%</span>
+        <span class="now-val delta-down" id="mg-now">15.9%</span>
+      </div>
+      <div class="ledger-row">
+        <span class="label">Net debt</span>
+        <span class="then-val" id="dt-then">₹412 cr</span>
+        <span class="now-val delta-up" id="dt-now">₹528 cr</span>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Show figures as later restated</span>
+        <button class="switch" id="restate-toggle" aria-pressed="false" aria-label="Toggle restated figures">
+          <span class="knob"></span>
+        </button>
+      </div>
+      <p class="caption">Illustrative example. This is the difference every backtest, screen, and valuation model quietly ignores — an audit adjustment two years later, applied retroactively as if it were always known.</p>
+    </div>
+  </div>
+</header>
+
+<div class="wrap"><hr class="rule"></div>
+
+<section id="gap">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">The gap</p>
+      <h2>Everyone rebuilds the same messy ledger. No one keeps the original pages.</h2>
+      <p>Screeners, terminals, and research platforms all pull from the same exchange bhavcopy files and restate them into today's figures. What gets thrown away in that process is the record of what the market actually knew, when it knew it.</p>
+    </div>
+
+    <div class="entries">
+      <div class="entry">
+        <div class="term"><b>Point-in-time fundamentals</b>data, not screens</div>
+        <div class="desc">Financials as originally filed, before later restatement — so a backtest from 2019 uses what a 2019 investor actually saw, not a 2026 revision. <span class="status-pill pill-unknown">largely absent from retail platforms today</span></div>
+      </div>
+      <div class="entry">
+        <div class="term"><b>Survivorship-inclusive returns</b>corporate actions</div>
+        <div class="desc">Delisted, acquired, and bankrupt companies stay in the dataset. A universe that only contains today's winners isn't history — it's a highlight reel.</div>
+      </div>
+      <div class="entry">
+        <div class="term"><b>Permanent entity identity</b>corporate graph</div>
+        <div class="desc">Every ticker, name change, merger, and demerger resolved to one identity, so "what was this security actually representing on this date" has a real answer.</div>
+      </div>
+      <div class="entry">
+        <div class="term"><b>Data confidence, shown</b>provenance</div>
+        <div class="desc">Every figure carries its own label — <span class="status-pill pill-verified">verified</span> <span class="status-pill pill-estimated">estimated</span> <span class="status-pill pill-unknown">unconfirmed</span> — instead of presenting inference as fact.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><hr class="rule"></div>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">Twelve months</p>
+      <h2>Built once, correctly. Not shipped as a dashboard first.</h2>
+      <p>The dataset comes before the interface. Each quarter adds depth that the next quarter depends on.</p>
+    </div>
+    <div class="roadmap">
+      <div class="rstep">
+        <span class="rn">01</span>
+        <span class="rq">Q1</span>
+        <span class="rt">Point-in-time and permanent entity-ID layer<small>Extending the existing analytics pipeline to snapshot, not overwrite, every figure it pulls.</small></span>
+      </div>
+      <div class="rstep">
+        <span class="rn">02</span>
+        <span class="rq">Q2</span>
+        <span class="rt">Public record: the historical return calculator<small>A free tool showing what an investment on any past date would be worth today — the front door, not the product.</small></span>
+      </div>
+      <div class="rstep">
+        <span class="rn">03</span>
+        <span class="rq">Q3</span>
+        <span class="rt">Full listed universe, survivorship included<small>Expanding beyond the Sensex-30 to the broader BSE-listed set, delistings and all.</small></span>
+      </div>
+      <div class="rstep">
+        <span class="rn">04</span>
+        <span class="rq">Q4</span>
+        <span class="rt">Institutional API, first paying design partner<small>Regime, event, and point-in-time endpoints, piloted with an existing research relationship.</small></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><hr class="rule"></div>
+
+<section id="api">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">For builders</p>
+      <h2>A record you can query, not just read.</h2>
+      <p>The dataset is the product. The API is how it reaches research desks, funds, and the fintechs who'd rather license clean history than rebuild it.</p>
+    </div>
+    <div class="api-shell">
+      <ul class="api-list">
+        <li><b>/entities</b><span>permanent company identity</span></li>
+        <li><b>/fundamentals/point-in-time</b><span>as filed, by date</span></li>
+        <li><b>/corporate-actions</b><span>splits, bonuses, mergers</span></li>
+        <li><b>/returns/total</b><span>dividend-adjusted history</span></li>
+        <li><b>/events/drawdowns</b><span>standardized crash schema</span></li>
+        <li><b>/confidence</b><span>provenance per data point</span></li>
+      </ul>
+      <pre class="codeblock"><span class="c">// GET /fundamentals/point-in-time</span>
+<span class="c">//     ?entity=IL0001&date=2019-01-15</span>
+{
+  <span class="k">"entity_id"</span>: <span class="s">"IL0001"</span>,
+  <span class="k">"as_filed"</span>: {
+    <span class="k">"period"</span>: <span class="s">"FY19-Q3"</span>,
+    <span class="k">"eps"</span>: <span class="s">"14.20"</span>,
+    <span class="k">"net_margin"</span>: <span class="s">"18.4%"</span>
+  },
+  <span class="k">"current_record"</span>: {
+    <span class="k">"eps"</span>: <span class="s">"11.85"</span>,
+    <span class="k">"net_margin"</span>: <span class="s">"15.9%"</span>,
+    <span class="k">"restated"</span>: <span class="k">true</span>
+  },
+  <span class="k">"confidence"</span>: <span class="s">"verified"</span>
+}</pre>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><hr class="rule"></div>
+
+<section id="access">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">Access</p>
+      <h2>Free where it builds trust. Priced where it saves a research desk time.</h2>
+    </div>
+    <div class="tiers">
+      <div class="trow head">
+        <span class="cell">Tier</span>
+        <span class="cell">For</span>
+        <span class="cell">Includes</span>
+        <span class="cell">Access</span>
+      </div>
+      <div class="trow">
+        <span class="cell name">Free</span>
+        <span class="cell">Anyone</span>
+        <span class="cell">Return calculator, drawdown archive, daily record</span>
+        <span class="cell">Open</span>
+      </div>
+      <div class="trow">
+        <span class="cell name">Pro</span>
+        <span class="cell">Serious retail &amp; researchers</span>
+        <span class="cell">Point-in-time screens, exports, alerts</span>
+        <span class="cell">Waitlist</span>
+      </div>
+      <div class="trow">
+        <span class="cell name">Institutional</span>
+        <span class="cell">Funds, PMS, fintechs</span>
+        <span class="cell">Full API, regime &amp; event endpoints, licensing</span>
+        <span class="cell">By request</span>
+      </div>
+    </div>
+
+    <div class="waitlist" style="margin-top:56px;">
+      <div>
+        <h3>Get the first data drop.</h3>
+        <p>No spam, no daily digest — one note when the point-in-time dataset opens for early access.</p>
+      </div>
+      <form class="wform" id="waitlist-form">
+        <input type="email" id="wemail" placeholder="you@fund.com" required aria-label="Email address">
+        <button type="submit">Join the waitlist</button>
+        <span class="form-note" id="wnote">We'll only email you about access.</span>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-row">
+    <span>sensex.money — a permanent record of Indian markets</span>
+    <span>Built on public exchange data. Not investment advice.</span>
+  </div>
+</footer>
+
+<script>
+  // Point-in-time restatement toggle
+  (function(){
+    var toggle = document.getElementById('restate-toggle');
+    var colThen = document.getElementById('col-then');
+    var data = {
+      eps: { then: '₹14.20', now: '₹11.85' },
+      mg:  { then: '18.4%',  now: '15.9%' },
+      dt:  { then: '₹412 cr', now: '₹528 cr' }
+    };
+    toggle.addEventListener('click', function(){
+      var pressed = toggle.getAttribute('aria-pressed') === 'true';
+      toggle.setAttribute('aria-pressed', String(!pressed));
+      if(!pressed){
+        colThen.textContent = 'Restated, current filing';
+        document.getElementById('eps-then').textContent = data.eps.now;
+        document.getElementById('mg-then').textContent = data.mg.now;
+        document.getElementById('dt-then').textContent = data.dt.now;
+      } else {
+        colThen.textContent = 'As filed, Jan 2019';
+        document.getElementById('eps-then').textContent = data.eps.then;
+        document.getElementById('mg-then').textContent = data.mg.then;
+        document.getElementById('dt-then').textContent = data.dt.then;
+      }
+    });
+  })();
+
+  // Waitlist form — static site, no backend: confirms locally, ready to swap for Formspree/Getform action
+  (function(){
+    var form = document.getElementById('waitlist-form');
+    var note = document.getElementById('wnote');
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var email = document.getElementById('wemail').value;
+      note.textContent = "You're on the list — we'll email " + email + " when access opens.";
+      form.querySelector('button').textContent = 'Added';
+      form.querySelector('button').disabled = true;
+    });
+  })();
+</script>
+
+</body>
+</html>
