@@ -41,6 +41,7 @@ import {
   Lock,
   RefreshCw
 } from "lucide-react";
+import { supabase } from "../src/lib/supabase";
 
 // ============================================================================
 // ILLUSTRATIVE DATA FOR MARKET SNAPSHOT & HISTORICAL METRICS
@@ -1903,8 +1904,75 @@ export const demoMarketData = {
 // ============================================================================
 // MARKET PAGE COMPONENT (/market)
 // ============================================================================
+interface LatestPriceRow {
+  close: string | number;
+  trade_date: string;
+  ticker: string;
+}
+
 export const Market: React.FC = () => {
   const data = demoMarketData;
+
+  const [latestPrice, setLatestPrice] = useState<LatestPriceRow | null>(null);
+  const [latestPriceLoading, setLatestPriceLoading] = useState(true);
+  const [latestPriceError, setLatestPriceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchLatestPrice = async () => {
+      setLatestPriceLoading(true);
+      setLatestPriceError(null);
+      try {
+        const { data: priceRows, error: priceError } = await supabase
+          .from("prices")
+          .select("instrument_id, trade_date, close")
+          .order("trade_date", { ascending: false })
+          .limit(1);
+
+        if (priceError) throw priceError;
+        if (cancelled) return;
+
+        const priceRow = priceRows?.[0] as
+          | { instrument_id: string; trade_date: string; close: string | number }
+          | undefined;
+
+        if (!priceRow) {
+          setLatestPrice(null);
+          return;
+        }
+
+        const { data: instrumentRows, error: instrumentError } = await supabase
+          .from("instruments")
+          .select("ticker")
+          .eq("instrument_id", priceRow.instrument_id)
+          .limit(1);
+
+        if (instrumentError) throw instrumentError;
+        if (cancelled) return;
+
+        const instrumentRow = instrumentRows?.[0] as { ticker: string } | undefined;
+
+        setLatestPrice({
+          close: priceRow.close,
+          trade_date: priceRow.trade_date,
+          ticker: instrumentRow?.ticker ?? "UNKNOWN",
+        });
+      } catch (err) {
+        if (!cancelled) {
+          const message = err && typeof err === "object" && "message" in err
+            ? String((err as { message: unknown }).message)
+            : "Failed to load database price.";
+          setLatestPriceError(message);
+        }
+      } finally {
+        if (!cancelled) setLatestPriceLoading(false);
+      }
+    };
+
+    fetchLatestPrice();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div style={sharedStyles.root}>
@@ -1960,6 +2028,53 @@ export const Market: React.FC = () => {
                   Market values shown are demonstration data and do not represent live broker feeds.
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* 1.5 VERIFIED DATABASE DATA                                         */}
+        {/* ------------------------------------------------------------------ */}
+        <section style={{ padding: "24px 0", borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}>
+          <div style={sharedStyles.container}>
+            <div style={{
+              backgroundColor: "#0d1527",
+              border: "1px solid rgba(16, 185, 129, 0.28)",
+              borderRadius: "8px",
+              padding: "20px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "11px", fontWeight: 700, fontFamily: '"SF Mono", "JetBrains Mono", monospace', letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>
+                <CheckCircle2 size={13} />
+                <span>VERIFIED DATABASE DATA</span>
+              </div>
+
+              {latestPriceLoading && (
+                <div style={{ fontSize: "13px", color: "#94a3b8" }}>Loading latest price from database…</div>
+              )}
+
+              {!latestPriceLoading && latestPriceError && (
+                <div style={{ fontSize: "13px", color: "#f87171" }}>
+                  Unable to load database price: {latestPriceError}
+                </div>
+              )}
+
+              {!latestPriceLoading && !latestPriceError && !latestPrice && (
+                <div style={{ fontSize: "13px", color: "#94a3b8" }}>No price rows found in the database yet.</div>
+              )}
+
+              {!latestPriceLoading && !latestPriceError && latestPrice && (
+                <div style={{ display: "flex", alignItems: "baseline", gap: "16px", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>{latestPrice.ticker}</div>
+                  </div>
+                  <div style={{ fontSize: "24px", fontWeight: 800, color: "#10b981", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>
+                    {latestPrice.close}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#64748b" }}>
+                    as of {latestPrice.trade_date}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -3804,6 +3919,96 @@ export const Stocks: React.FC = () => {
   const [selectedSector, setSelectedSector] = useState("ALL");
   const navigate = useNavigate();
 
+  interface VerifiedStockRow {
+    instrument_id: string;
+    ticker: string;
+    trade_date: string;
+    open: string | number;
+    high: string | number;
+    low: string | number;
+    close: string | number;
+    volume: string | number;
+  }
+
+  type VerifiedStocksStatus = "loading" | "empty" | "ready" | "error";
+
+  const [verifiedStocksStatus, setVerifiedStocksStatus] = useState<VerifiedStocksStatus>("loading");
+  const [verifiedStocksError, setVerifiedStocksError] = useState<string | null>(null);
+  const [verifiedStocks, setVerifiedStocks] = useState<VerifiedStockRow[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchVerifiedStocks = async () => {
+      setVerifiedStocksStatus("loading");
+      setVerifiedStocksError(null);
+
+      try {
+        const { data: instrumentRows, error: instrumentError } = await supabase
+          .from("instruments")
+          .select("instrument_id, listing_id, ticker");
+
+        if (instrumentError) throw instrumentError;
+        if (cancelled) return;
+
+        const instruments = (instrumentRows ?? []) as { instrument_id: string; listing_id: string; ticker: string }[];
+
+        if (instruments.length === 0) {
+          setVerifiedStocks([]);
+          setVerifiedStocksStatus("empty");
+          return;
+        }
+
+        const rows = await Promise.all(
+          instruments.map(async (instrument) => {
+            const { data: priceRows, error: priceError } = await supabase
+              .from("prices")
+              .select("trade_date, open, high, low, close, volume")
+              .eq("instrument_id", instrument.instrument_id)
+              .order("trade_date", { ascending: false })
+              .limit(1);
+
+            if (priceError) throw priceError;
+
+            const priceRow = priceRows?.[0] as
+              | { trade_date: string; open: string | number; high: string | number; low: string | number; close: string | number; volume: string | number }
+              | undefined;
+
+            if (!priceRow) return null;
+
+            return {
+              instrument_id: instrument.instrument_id,
+              ticker: instrument.ticker,
+              trade_date: priceRow.trade_date,
+              open: priceRow.open,
+              high: priceRow.high,
+              low: priceRow.low,
+              close: priceRow.close,
+              volume: priceRow.volume,
+            } as VerifiedStockRow;
+          })
+        );
+
+        if (cancelled) return;
+
+        const withPrices = rows.filter((row): row is VerifiedStockRow => row !== null);
+        setVerifiedStocks(withPrices);
+        setVerifiedStocksStatus(withPrices.length === 0 ? "empty" : "ready");
+      } catch (err) {
+        if (!cancelled) {
+          const message = err && typeof err === "object" && "message" in err
+            ? String((err as { message: unknown }).message)
+            : "Failed to load verified database stock data.";
+          setVerifiedStocksError(message);
+          setVerifiedStocksStatus("error");
+        }
+      }
+    };
+
+    fetchVerifiedStocks();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     document.title = "Indian Stock Explorer | Sensex.money";
   }, []);
@@ -3947,6 +4152,92 @@ export const Stocks: React.FC = () => {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* 1.5 VERIFIED DATABASE DATA                                         */}
+        {/* ------------------------------------------------------------------ */}
+        <section style={{ padding: "24px 0", borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}>
+          <div style={sharedStyles.container}>
+            <div style={{
+              backgroundColor: "#0d1527",
+              border: "1px solid rgba(16, 185, 129, 0.28)",
+              borderRadius: "8px",
+              padding: "20px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "11px", fontWeight: 700, fontFamily: '"SF Mono", "JetBrains Mono", monospace', letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>
+                <CheckCircle2 size={13} />
+                <span>VERIFIED DATABASE DATA</span>
+              </div>
+
+              {verifiedStocksStatus === "loading" && (
+                <div style={{ fontSize: "13px", color: "#94a3b8" }}>Loading verified database stock data…</div>
+              )}
+
+              {verifiedStocksStatus === "empty" && (
+                <div style={{ fontSize: "13px", color: "#94a3b8" }}>No verified database stock data available.</div>
+              )}
+
+              {verifiedStocksStatus === "error" && (
+                <div style={{ fontSize: "13px", color: "#f87171" }}>
+                  Unable to load verified database stock data: {verifiedStocksError}
+                </div>
+              )}
+
+              {verifiedStocksStatus === "ready" && verifiedStocks.length > 0 && (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "12px",
+                }}>
+                  {verifiedStocks.map((row) => (
+                    <Link
+                      key={row.instrument_id}
+                      to={`/stocks/${row.ticker}`}
+                      style={{
+                        backgroundColor: "#0b1220",
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: "6px",
+                        padding: "14px 16px",
+                        textDecoration: "none",
+                        display: "block",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <div style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff" }}>{row.ticker}</div>
+                        <div style={{ fontSize: "18px", fontWeight: 800, color: "#10b981", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>
+                          {row.close}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "8px" }}>as of {row.trade_date}</div>
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: "6px",
+                      }}>
+                        <div>
+                          <div style={{ fontSize: "9px", color: "#64748b" }}>OPEN</div>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{row.open}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "9px", color: "#64748b" }}>HIGH</div>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{row.high}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "9px", color: "#64748b" }}>LOW</div>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{row.low}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "9px", color: "#64748b" }}>VOLUME</div>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{row.volume}</div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -4120,6 +4411,151 @@ export const Company: React.FC = () => {
 
   const profile = useMemo(() => getCompanyProfile(symbol || "INFY"), [symbol]);
 
+  interface VerifiedCompanyIdentity {
+    ticker: string;
+    issuerName: string;
+    trade_date: string;
+    open: string | number;
+    high: string | number;
+    low: string | number;
+    close: string | number;
+    adj_close: string | number;
+    volume: string | number;
+    source: string;
+  }
+
+  type VerifiedStatus = "loading" | "no_identity" | "no_price" | "ready" | "error";
+
+  const [verifiedStatus, setVerifiedStatus] = useState<VerifiedStatus>("loading");
+  const [verifiedError, setVerifiedError] = useState<string | null>(null);
+  const [verifiedData, setVerifiedData] = useState<VerifiedCompanyIdentity | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const requestedTicker = (symbol || "").toUpperCase();
+
+    const fetchVerifiedIdentity = async () => {
+      setVerifiedStatus("loading");
+      setVerifiedError(null);
+      setVerifiedData(null);
+
+      if (!requestedTicker) {
+        if (!cancelled) setVerifiedStatus("no_identity");
+        return;
+      }
+
+      try {
+        const { data: instrumentRows, error: instrumentError } = await supabase
+          .from("instruments")
+          .select("instrument_id, listing_id, ticker")
+          .eq("ticker", requestedTicker)
+          .limit(1);
+
+        if (instrumentError) throw instrumentError;
+        if (cancelled) return;
+
+        const instrumentRow = instrumentRows?.[0] as
+          | { instrument_id: string; listing_id: string; ticker: string }
+          | undefined;
+
+        if (!instrumentRow) {
+          setVerifiedStatus("no_identity");
+          return;
+        }
+
+        const { data: listingRows, error: listingError } = await supabase
+          .from("listings")
+          .select("security_id")
+          .eq("listing_id", instrumentRow.listing_id)
+          .limit(1);
+
+        if (listingError) throw listingError;
+        if (cancelled) return;
+
+        const listingRow = listingRows?.[0] as { security_id: string } | undefined;
+
+        const { data: securityRows, error: securityError } = listingRow
+          ? await supabase
+              .from("securities")
+              .select("issuer_id")
+              .eq("security_id", listingRow.security_id)
+              .limit(1)
+          : { data: null, error: null };
+
+        if (securityError) throw securityError;
+        if (cancelled) return;
+
+        const securityRow = securityRows?.[0] as { issuer_id: string } | undefined;
+
+        const { data: issuerRows, error: issuerError } = securityRow
+          ? await supabase
+              .from("issuers")
+              .select("legal_name")
+              .eq("issuer_id", securityRow.issuer_id)
+              .limit(1)
+          : { data: null, error: null };
+
+        if (issuerError) throw issuerError;
+        if (cancelled) return;
+
+        const issuerRow = issuerRows?.[0] as { legal_name: string } | undefined;
+
+        const { data: priceRows, error: priceError } = await supabase
+          .from("prices")
+          .select("trade_date, open, high, low, close, adj_close, volume, source")
+          .eq("instrument_id", instrumentRow.instrument_id)
+          .order("trade_date", { ascending: false })
+          .limit(1);
+
+        if (priceError) throw priceError;
+        if (cancelled) return;
+
+        const priceRow = priceRows?.[0] as
+          | {
+              trade_date: string;
+              open: string | number;
+              high: string | number;
+              low: string | number;
+              close: string | number;
+              adj_close: string | number;
+              volume: string | number;
+              source: string;
+            }
+          | undefined;
+
+        if (!priceRow) {
+          setVerifiedStatus("no_price");
+          return;
+        }
+
+        setVerifiedData({
+          ticker: instrumentRow.ticker,
+          issuerName: issuerRow?.legal_name ?? "Unknown Issuer",
+          trade_date: priceRow.trade_date,
+          open: priceRow.open,
+          high: priceRow.high,
+          low: priceRow.low,
+          close: priceRow.close,
+          adj_close: priceRow.adj_close,
+          volume: priceRow.volume,
+          source: priceRow.source,
+        });
+        setVerifiedStatus("ready");
+      } catch (err) {
+        if (!cancelled) {
+          const message = err && typeof err === "object" && "message" in err
+            ? String((err as { message: unknown }).message)
+            : "Failed to load verified database identity.";
+          setVerifiedError(message);
+          setVerifiedStatus("error");
+        }
+      }
+    };
+
+    fetchVerifiedIdentity();
+    return () => { cancelled = true; };
+  }, [symbol]);
+
   useEffect(() => {
     document.title = `${profile.name} (${profile.symbol}) Historical Analysis | Sensex.money`;
   }, [profile]);
@@ -4245,6 +4681,90 @@ export const Company: React.FC = () => {
                 <div style={{ fontSize: "10px", color: "#64748b" }}>MAX (SINCE LISTING)</div>
                 <div style={{ fontSize: "13px", fontWeight: 700, color: "#10b981", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{profile.timeframeReturns.max}</div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* 1.5 VERIFIED DATABASE DATA                                         */}
+        {/* ------------------------------------------------------------------ */}
+        <section style={{ padding: "24px 0", borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}>
+          <div style={sharedStyles.container}>
+            <div style={{
+              backgroundColor: "#0d1527",
+              border: "1px solid rgba(16, 185, 129, 0.28)",
+              borderRadius: "8px",
+              padding: "20px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "11px", fontWeight: 700, fontFamily: '"SF Mono", "JetBrains Mono", monospace', letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>
+                <CheckCircle2 size={13} />
+                <span>VERIFIED DATABASE DATA</span>
+              </div>
+
+              {verifiedStatus === "loading" && (
+                <div style={{ fontSize: "13px", color: "#94a3b8" }}>Loading verified database identity…</div>
+              )}
+
+              {verifiedStatus === "no_identity" && (
+                <div style={{ fontSize: "13px", color: "#94a3b8" }}>No verified database identity found for this ticker.</div>
+              )}
+
+              {verifiedStatus === "no_price" && (
+                <div style={{ fontSize: "13px", color: "#94a3b8" }}>No verified price data available for this instrument.</div>
+              )}
+
+              {verifiedStatus === "error" && (
+                <div style={{ fontSize: "13px", color: "#f87171" }}>
+                  Unable to load verified database data: {verifiedError}
+                </div>
+              )}
+
+              {verifiedStatus === "ready" && verifiedData && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "16px", flexWrap: "wrap", marginBottom: "14px" }}>
+                    <div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>{verifiedData.ticker}</div>
+                      <div style={{ fontSize: "11px", color: "#64748b" }}>{verifiedData.issuerName}</div>
+                    </div>
+                    <div style={{ fontSize: "24px", fontWeight: 800, color: "#10b981", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>
+                      {verifiedData.close}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b" }}>
+                      as of {verifiedData.trade_date}
+                    </div>
+                  </div>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))",
+                    gap: "8px",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>OPEN</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{verifiedData.open}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>HIGH</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{verifiedData.high}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>LOW</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{verifiedData.low}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>ADJ. CLOSE</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{verifiedData.adj_close}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>VOLUME</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{verifiedData.volume}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#64748b" }}>SOURCE</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#cbd5e1", fontFamily: '"SF Mono", "JetBrains Mono", monospace' }}>{verifiedData.source}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
